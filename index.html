@@ -2407,7 +2407,7 @@ function resizeAndCompressImage(file, maxDimension = 1600, quality = 0.85) {
                 const charA = charactersObj[a];
                 const charB = charactersObj[b];
 
-                const isKpGm = name => name === 'KP' || name === 'GM';
+                const isKpGm = name => name === 'KP' || name === 'GM' || name === 'DL' || name === 'NC';
                 const isKpGmA = isKpGm(a);
                 const isKpGmB = isKpGm(b);
                 if (isKpGmA && !isKpGmB) return -1;
@@ -2734,7 +2734,7 @@ storyData.simpleBgmVolume = (parsed.simpleBgmVolume !== undefined) ? parsed.simp
             storyData.messages.forEach(msg => {
                 const msgName = msg.name !== undefined && msg.name !== null ? msg.name : "";
                 if (!storyData.characters[msgName]) {
-                    const isDefaultMain = (msgName === 'KP' || msgName === 'GM') && (storyData.gmKpCenterDisplay !== false);
+                    const isDefaultMain = (msgName === 'KP' || msgName === 'GM' || msgName === 'DL' || msgName === 'NC') && (storyData.gmKpCenterDisplay !== false);
                     storyData.characters[msgName] = {
                         name: msgName,
                         color: msg.color || "#ffffff",
@@ -2916,7 +2916,7 @@ function switchTab(tabName) {
 		function updateGmKpCenterDisplay(checked) {
             storyData.gmKpCenterDisplay = checked;
             Object.keys(storyData.characters).forEach(k => {
-                if (k === 'GM' || k === 'KP') {
+                if (k === 'GM' || k === 'KP' || k === 'DL' || k === 'NC') {
                     storyData.characters[k].isMainDisplay = checked;
                 }
             });
