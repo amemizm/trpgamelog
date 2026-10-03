@@ -99,7 +99,15 @@
             border-radius: 4px;
             font-size: 13px;
         }
-
+        select, ::picker(select) {
+            appearance: base-select;
+        }
+        ::picker(select) {
+            padding: 0;
+        }
+        select option {
+            padding: 2px 4px 2px 0;
+        }
         input[type="file"] { display: none; }
 
         /* シークバーエリア */
@@ -212,7 +220,7 @@
 
         #dialog-box {
             width: 100%;
-            height: 230px;
+            height: 220px;
             max-height: 250px;
             background: rgba(0, 0, 0, 0.92);
             border: 2px solid #555;
@@ -249,6 +257,32 @@
             display: block;
             position: relative;
             
+        }
+        /* アイコン小：中央パネルの丸型アイコンと同じ設定 */
+        #dialog-box.icon-size-mini {
+            overflow: hidden;
+        }
+        #dialog-box.icon-size-mini #avatar-container {
+            width: 100px;
+            height: 100px;
+            flex-shrink: 0;
+            align-self: flex-start;
+            margin: 12px 0 0 10px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: #000;
+            box-sizing: border-box;
+            align-items: center;
+            justify-content: center;
+        }
+        #dialog-box.icon-size-mini #character-avatar {
+            width: 100%;
+            height: 100%;
+            max-width: none;
+            object-fit: cover;
+            object-position: center top;
+            display: block;
         }
         /* 画像の縦横比で表示方法を切り替え（アイコン小・主要アイコン共通） */
         .icon-fit-wide {
@@ -770,8 +804,8 @@
         <!-- 左側エリア：「JSON読み込み」「編集モードへ」ボタン -->
         <div class="top-bar-left">
             <label class="btn-label">
-                JSON読み込み
-                <input type="file" id="json-input" accept=".json">
+                ログ読み込み
+                <input type="file" id="json-input" accept=".json,.html,.htm">
             </label>
             <button id="btn-mode-toggle" onclick="toggleMainView()" style="background-color: #2e7d32;">編集モードへ</button>
         </div>
@@ -796,10 +830,11 @@
 
             <div class="bar-group">
                 <label>アイコン:</label>
-                <select id="icon-size-select" onchange="changeIconSize(this.value)">
-                    <option value="small" selected>小</option>
-                    <option value="large">大</option>
-                </select>
+<select id="icon-size-select" onchange="changeIconSize(this.value)">
+    <option value="mini">小</option>
+    <option value="small" selected>標準</option>
+    <option value="large">大</option>
+</select>
             </div>
 
             <div class="bar-group">
@@ -871,7 +906,7 @@
                     </div>
                     <div id="dialog-content">
                         <div id="speaker-name"></div>
-                        <div id="message-text">JSONファイルを読み込んでください。</div>
+                        <div id="message-text">JSONファイル、もしくは未整形のHTMLファイルを読み込んでください。</div>
                     </div>
                     <div id="click-prompt">▼ Click / Space</div>
                 </div>
@@ -1419,11 +1454,13 @@
         function changeTextSpeed(speed) { textSpeed = parseInt(speed, 10); }
         function changeAutoWait(ms) { autoWaitTime = parseInt(ms, 10); }
 
-        function changeIconSize(size) {
+        function changeIconSize(size, skipRender) {
             currentIconSize = size;
-            dialogBox.classList.remove('icon-size-small', 'icon-size-large');
+            dialogBox.classList.remove('icon-size-mini', 'icon-size-small', 'icon-size-large');
             dialogBox.classList.add(`icon-size-${size}`);
-            renderPlayer();
+            const sel = document.getElementById('icon-size-select');
+            if (sel) sel.value = size;
+            if (!skipRender) renderPlayer();
         }
 
         function changeMasterVolume(val) {
@@ -1984,13 +2021,15 @@
                         // 各キャラクターの文字色を取得（未設定なら白）
                         const charBorderColor = charInfo.color || '#ffffff';
 
+                        const isMini = (currentIconSize === 'mini');
+
                         box.style.cssText = `width: 200px; height: 200px; overflow: hidden; display: flex; align-items: flex-start; justify-content: center; background: rgba(0,0,0,0.5); border: 2px solid ${charBorderColor}; border-radius: 8px; box-sizing: border-box; flex-shrink: 0; position: relative;`;
 
                         const img = document.createElement('img');
                         const imgOpacity = isDimmed ? '0.9' : '1.0';
                         img.style.cssText = `display: block; opacity: ${imgOpacity}; transition: opacity 0.3s ease;`;
                         setIconSrc(img, url);
-                        
+
                         box.appendChild(img);
 
                         const overlay = document.createElement('div');
@@ -2088,7 +2127,7 @@
                 let isAvatarDisplayed = false;
                 const hasIconToShow = shouldShowIcon && iconKey && storyData.images[iconKey];
 
-                if (currentIconSize === 'small') {
+                if (currentIconSize === 'small' || currentIconSize === 'mini') {
                     avatarContainerLarge.style.display = 'none';
                     characterAvatarLarge.style.display = 'none';
 
@@ -2405,7 +2444,90 @@ function resizeAndCompressImage(file, maxDimension = 1600, quality = 0.85) {
 
             document.body.removeChild(container);
         }
+// HTMLログ（2パターン）を JSON構成の messages に変換する
+function parseHtmlLog(htmlText) {
+    const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+    const getText = el => {
+        const c = el.cloneNode(true);
+        c.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+        return c.textContent.trim();
+    };
+    const cleanCh = s => (s || '').replace(/[\[\]]/g, '').trim();
+    const getColor = el => {
+        const m = (el.getAttribute('style') || '').match(/(?:--speaker-color|(?:^|;)\s*color)\s*:\s*([^;]+)/);
+        return m ? m[1].trim() : '#ffffff';
+    };
+    const messages = [];
+    // CSS内の .avatar-xxx { background-image: url("data:...") } を images に変換
+    const images = {};
+    doc.querySelectorAll('style').forEach(st => {
+        const re = /\.avatar-([\w-]+)\s*\{[^}]*?background-image\s*:\s*url\(\s*(["']?)(data:[^"')]+)\2\s*\)/g;
+        let m;
+        while ((m = re.exec(st.textContent)) !== null) {
+            images[m[1]] = m[3];   // 例: "image-0" → "data:image/png;base64,..."
+        }
+    });
+    // パターン①：<article class="message">
+    const articles = doc.querySelectorAll('article.message');
+    if (articles.length > 0) {
+        articles.forEach(art => {
+            const speaker = art.querySelector('.speaker');
+            const textEl = art.querySelector('.message-text');
+            const rollEl = art.querySelector('.roll-result');
+            const chEl = art.querySelector('.channel-name');
+            const avatar = art.querySelector('.avatar');
 
+            let iconImage = null;
+            if (avatar) {
+                const cls = Array.from(avatar.classList).find(c => c.startsWith('avatar-'));
+                if (cls) iconImage = cls.replace(/^avatar-/, '');
+            }
+
+            const msg = {
+                name: speaker ? getText(speaker) : '',
+                color: speaker ? getColor(speaker) : '#ffffff',
+                text: textEl ? getText(textEl) : '',
+                type: 'text',
+                extend: {},
+                edited: false,
+                channelName: cleanCh((chEl && getText(chEl)) || art.dataset.channel) || 'main',
+                iconImage: iconImage
+            };
+            if (rollEl && getText(rollEl)) {
+                msg.extend = { roll: { result: getText(rollEl) } };
+            }
+            messages.push(msg);
+        });
+        return { messages, images };
+    }
+
+    // パターン②：<p style="color:..."><span>ch</span><span>name</span> : <span>text</span></p>
+    doc.querySelectorAll('p').forEach(p => {
+        const spans = Array.from(p.children).filter(el => el.tagName === 'SPAN');
+        if (spans.length < 3) return;
+        messages.push({
+            name: getText(spans[1]),
+            color: getColor(p),
+            text: getText(spans[2]),
+            type: 'text',
+            extend: {},
+            edited: false,
+            channelName: cleanCh(getText(spans[0])) || 'main',
+            iconImage: null
+        });
+    });
+    return { messages };
+}
+
+// ファイル内容から JSON / HTML を判別してパース
+function parseLogFile(text, fileName) {
+    const isHtml = /\.html?$/i.test(fileName || '') || /^\s*</.test(text);
+    if (!isHtml) return JSON.parse(text);
+    const result = parseHtmlLog(text);
+    if (result.messages.length === 0) throw new Error('メッセージが見つかりません');
+    result.isHtmlLog = true;
+    return result;
+}
         document.getElementById('json-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -2414,8 +2536,8 @@ function resizeAndCompressImage(file, maxDimension = 1600, quality = 0.85) {
             reader.onload = function(evt) {
                 try {
                     clearUrlCache();
-                    const parsed = JSON.parse(evt.target.result);
-                    
+                    const parsed = parseLogFile(evt.target.result, file.name);
+                    if (parsed.isHtmlLog) changeIconSize('mini', true);   // HTML読み込み時は「小」を選択（以降は手動変更可）
                     if (parsed.messages) {
                         parsed.messages.forEach(msg => {
                             if (msg.channel !== undefined && msg.channelName === undefined) {
@@ -2492,9 +2614,11 @@ storyData.simpleBgmVolume = (parsed.simpleBgmVolume !== undefined) ? parsed.simp
                     renderChannels();
                     renderScenes();
                     renderSimpleSettings();
-					if (!parsed.isEditorExported) {
-                        if (!storyData.isEditorExported) {
-                            openMainRolePickerModal(); // 主要キャラ設定アラート（モーダル）を開く関数
+                    if (!parsed.isEditorExported) {
+                        if (parsed.isHtmlLog) {
+                            openSimpleInitModal();            // 主要キャラ設定をスキップし、簡易設定のみ表示
+                        } else if (!storyData.isEditorExported) {
+                            openMainRolePickerModal();        // 主要キャラ設定アラート（モーダル）を開く関数
                         } else {
                             renderPlayer();
                         }
@@ -2507,7 +2631,7 @@ storyData.simpleBgmVolume = (parsed.simpleBgmVolume !== undefined) ? parsed.simp
                     }
                     renderIconManager();
                 } catch (err) {
-                    alert('JSONファイルの読み込みに失敗しました。');
+                    alert('ファイルの読み込みに失敗しました。');
                 }
             };
             reader.readAsText(file);
@@ -3042,8 +3166,11 @@ function switchTab(tabName) {
         async function addNewIconToChar(file) {
             if (!file) return;
             const select = document.getElementById('icon-char-select');
-            const char = storyData.characters[select ? select.value : ""];
+            const charKey = select ? select.value : "";
+            const char = storyData.characters[charKey];
             if (!char) return;
+
+            const wasEmpty = !char.icons || char.icons.length === 0;   // 追加前のアイコン数が0か
 
             const imageKey = await storeMedia('images', file);
             if (!char.icons) char.icons = [];
@@ -3053,9 +3180,20 @@ function switchTab(tabName) {
                 imageKey: imageKey
             });
 
+            // アイコン数0からの初回設定時のみ、アイコン未設定のメッセージに1つ目のアイコンを自動設定
+            if (wasEmpty) {
+                storyData.messages.forEach(msg => {
+                    const n = (msg.name !== undefined && msg.name !== null) ? msg.name : "";
+                    if (n === charKey && !msg.iconImage) {
+                        msg.iconImage = imageKey;
+                    }
+                });
+            }
+
             sortIcons(char.icons);
             renderIconManager();
             renderCharacters();
+            renderEditor();
         }
 
         async function replaceIconImage(charKey, iconId, file) {
