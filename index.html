@@ -2071,22 +2071,23 @@
             });
 
             let rollHTML = "";
-            if (msg.extend && msg.extend.roll && msg.extend.roll.result) {
+            const hasRoll = !!(msg.extend && msg.extend.roll && msg.extend.roll.result);
+            if (hasRoll) {
                 rollHTML = formatRollResultHTML(msg.extend.roll.result);
-                if (storyData.playDiceSe !== false) {
-                    const diceAudioKey = storyData.diceAudioKey || "dice"; 
-                    const diceSrc = (storyData.audio && storyData.audio[diceAudioKey]) 
-                        ? getMediaUrl(diceAudioKey, 'audio') 
-                        : DEFAULT_DICE_SE;
+            }
+            if ((hasRoll || (msg.extend && msg.extend.diceSe)) && storyData.playDiceSe !== false) {
+                const diceAudioKey = storyData.diceAudioKey || "dice"; 
+                const diceSrc = (storyData.audio && storyData.audio[diceAudioKey]) 
+                    ? getMediaUrl(diceAudioKey, 'audio') 
+                    : DEFAULT_DICE_SE;
 
-                    sePlayer.src = diceSrc;
-                    // マスター音量に掛け合わせる、または設定がなければ DEFAULT_DICE_VOLUME を使う
-                    const diceVol = (typeof storyData.diceVolume !== 'undefined') ? storyData.diceVolume : DEFAULT_DICE_VOLUME;
-                    sePlayer.volume = (typeof masterVolume !== 'undefined') ? masterVolume * diceVol : diceVol;
-                    sePlayer.loop = false;
-                    sePlayer.currentTime = 0;
-                    sePlayer.play().catch(() => {});
-                }
+                sePlayer.src = diceSrc;
+                // マスター音量に掛け合わせる、または設定がなければ DEFAULT_DICE_VOLUME を使う
+                const diceVol = (typeof storyData.diceVolume !== 'undefined') ? storyData.diceVolume : DEFAULT_DICE_VOLUME;
+                sePlayer.volume = (typeof masterVolume !== 'undefined') ? masterVolume * diceVol : diceVol;
+                sePlayer.loop = false;
+                sePlayer.currentTime = 0;
+                sePlayer.play().catch(() => {});
             }
 
             const messageTextColor = (charInfo.colorMode === 'name+msg') ? (charInfo.color || '#ffffff') : null;
@@ -2528,17 +2529,74 @@ function parseHtmlLog(htmlText) {
         });
         return { messages, images };
     }
+    // パターン③：<font color='#888'><b>name</b>：text[<br>dice]</font><br>
+    const fonts = Array.from(doc.querySelectorAll('font')).filter(f => f.querySelector(':scope > b'));
+    if (fonts.length > 0) {
+        fonts.forEach(f => {
+            const b = f.querySelector(':scope > b');
+            const rawName = getText(b);
 
+            // <b>より後ろの内容を、<br>を改行として文字列化
+            let body = '';
+            let after = false;
+            f.childNodes.forEach(node => {
+                if (node === b) { after = true; return; }
+                if (!after) return;
+                if (node.nodeName === 'BR') body += '\n';
+                else body += node.textContent;
+            });
+            body = body.replace(/^\s*[：:]\s*/, '');   // <b>直後の「：」を削除
+
+            let lines = body.split('\n').map(s => s.trim());
+            while (lines.length && lines[lines.length - 1] === '') lines.pop();
+
+            // 「Insane :」「Cthulhu :」「MagicaLogia :」で始まる行以降をダイス結果として扱う
+            // （他のシステム名を足したい場合は ( ) 内に | 区切りで追加）
+            let rollResult = '';
+            const diceIdx = lines.findIndex(l => /^(Insane|Cthulhu|MagicaLogia)\s*[:：]/.test(l));
+            if (diceIdx >= 0) {
+                rollResult = lines.slice(diceIdx).join('\n');
+                lines = lines.slice(0, diceIdx);
+            }
+            const text = lines.join('\n').trim();
+            // 「A -> B」表記：発言者はA、チャンネルは「A -> B」。それ以外はメイン
+            let name = rawName;
+            let channelName = 'main';
+            const arrow = rawName.match(/^(.+?)\s*->\s*(.+)$/);
+            if (arrow) {
+                name = arrow[1].trim();
+                channelName = rawName;
+            }
+
+            const msg = {
+                name: name,
+                color: f.getAttribute('color') || '#ffffff',
+                text: text,
+                type: 'text',
+                extend: {},
+                edited: false,
+                channelName: channelName,
+                iconImage: null
+            };
+            if (rollResult) msg.extend = { roll: { result: rollResult } };
+            messages.push(msg);
+        });
+        return { messages };
+    }
     // パターン②：<p style="color:..."><span>ch</span><span>name</span> : <span>text</span></p>
     doc.querySelectorAll('p').forEach(p => {
         const spans = Array.from(p.children).filter(el => el.tagName === 'SPAN');
         if (spans.length < 3) return;
+        const text = getText(spans[2]);
+        // 「=」と「 ＞ 成功/失敗/クリティカル/スペシャル/ファンブル」を含む場合はダイス音を鳴らす
+        const isDice = /[=＝]/.test(text) &&
+                       /\s＞\s*(成功|失敗|クリティカル|スペシャル|ファンブル)/.test(text);
         messages.push({
             name: getText(spans[1]),
             color: getColor(p),
-            text: getText(spans[2]),
+            text: text,
             type: 'text',
-            extend: {},
+            extend: isDice ? { diceSe: true } : {},
             edited: false,
             channelName: cleanCh(getText(spans[0])) || 'main',
             iconImage: null
