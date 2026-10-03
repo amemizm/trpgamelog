@@ -1,6 +1,34 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+	<style id="lock-style">html { visibility: hidden !important; }</style>
+	<script>
+(function () {
+    const PASSWORD = 'log';   // 照合用の文字列
+    const KEY = 'unlocked';
+
+    function unlock() {
+        const st = document.getElementById('lock-style');
+        if (st) st.remove();                 // 非表示を解除
+    }
+
+    if (sessionStorage.getItem(KEY) === '1') {
+        unlock();
+    } else {
+        const input = prompt('パスワードを入力してください');
+        if (input === PASSWORD) {
+            sessionStorage.setItem(KEY, '1');
+            unlock();
+        }
+        // 不一致・キャンセル時は非表示のまま
+    }
+
+    // 「戻る」ボタンなどでキャッシュから表示された場合に、再確認させる
+    window.addEventListener('pageshow', function (e) {
+        if (e.persisted) location.reload();
+    });
+})();
+</script>
     <meta charset="UTF-8">
  	 <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -4752,18 +4780,6 @@ function generatePlayerHtml() {
                 redoEdit();
             }
         });
-
-    // 設定したいパスワード
-    const PASSWORD = "log";
-
-    // プロンプトでパスワード入力を求める
-    const input = prompt("パスワードを入力してください:");
-
-    if (input !== PASSWORD) {
-      alert("パスワードが違います。");
-      // 認証失敗時に別のページへリダイレクト（またはページを閉じる）
-      window.location.href = "https://www.google.com";
-    }
     </script>
 </body>
 </html>
