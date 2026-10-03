@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+ 	 <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ゲーム風ログエディター</title>
     <style id="common-style">
@@ -4614,6 +4615,17 @@ function generatePlayerHtml() {
             }
         });
 
+    // 設定したいパスワード
+    const PASSWORD = "log";
+
+    // プロンプトでパスワード入力を求める
+    const input = prompt("パスワードを入力してください:");
+
+    if (input !== PASSWORD) {
+      alert("パスワードが違います。");
+      // 認証失敗時に別のページへリダイレクト（またはページを閉じる）
+      window.location.href = "https://www.google.com";
+    }
     </script>
 </body>
 </html>
